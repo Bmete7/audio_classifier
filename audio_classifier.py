@@ -24,7 +24,7 @@ import torch.nn.functional as F
 import random
 import pennylane as qml
 
-
+import matplotlib.pyplot as plt
 
 
 import timeit
@@ -55,11 +55,13 @@ class DatasetCreation(nn.Module):
         
         if(math.log(data_size) % 1 != 0):
             assert('shape mismatch')
-        self.n_qubits = int(math.log2(data_size))
+        # self.n_qubits = int(math.log2(data_size))
+        self.n_qubits = 8
         self.create_data()
         @qml.qnode(dev)
         def q_circuit(weights_r ,weights_cr,inputs = False):
-            self.AmplitudeEmbedding(inputs)
+            # self.AmplitudeEmbedding(inputs)
+            self.embedding(inputs)
             
             # Exactly the same as the MPS at the Stoudenmire paper. 
             # Add images in the AWS notebook
@@ -83,6 +85,11 @@ class DatasetCreation(nn.Module):
         # weights_st = torch.tensor(qml.init.strong_ent_layers_uniform(3, self.training_qubits_size), requires_grad=True)
         
         self.qlayer = qml.qnn.TorchLayer(q_circuit, weight_shapes)
+        
+    @qml.template
+    def embedding(self,inputs):
+        qml.templates.embeddings.AngleEmbedding(inputs,wires = range(0,self.n_qubits), rotation = 'X')
+        
     @qml.template
     def AmplitudeEmbedding(self,inputs):
         qml.templates.embeddings.AmplitudeEmbedding(inputs,wires = range(0,self.n_qubits), normalize = True,pad=(0.j))
@@ -102,7 +109,13 @@ class DatasetCreation(nn.Module):
                     self.data[i, 0] = initial_value
                 increase_amount = (np.random.random_sample() / 20)
                 decrease_amount = (np.random.random_sample() / 30)
+                
+                increase_amount = (1 / 20)
+                decrease_amount = (1 / 30)
+                
                 for j in range(1, self.data_size):
+                    increase_amount = (np.random.random_sample() / 30)
+                    decrease_amount = (np.random.random_sample() / 20)
                     if( j <= self.data_size / 2):
                         if(i >= self.train_size):
                             self.test_data[i - self.train_size, j] = self.test_data[i - self.train_size,j-1] + increase_amount
@@ -124,7 +137,11 @@ class DatasetCreation(nn.Module):
                 
                 increase_amount = (np.random.random_sample() / 30)
                 decrease_amount = (np.random.random_sample() / 20)
+                increase_amount = (1 / 30)
+                decrease_amount = (1 / 20)
                 for j in range(1, self.data_size):
+                    increase_amount = (np.random.random_sample() / 30)
+                    decrease_amount = (np.random.random_sample() / 20)
                     if( j <= self.data_size / 2):
                         if(i >= self.train_size):
                             self.test_data[i - self.train_size, j] = self.test_data[i- self.train_size,j-1] - decrease_amount
@@ -143,8 +160,8 @@ class DatasetCreation(nn.Module):
     def getData(self):
         return self.data,self.test_data,self.labels,self.test_labels
 
-dev = qml.device("default.qubit", wires=4 ,shots = 1000)
-d = DatasetCreation(dev,16,5000)
+dev = qml.device("default.qubit", wires=8 ,shots = 1000)
+d = DatasetCreation(dev,8,50)
 
 
 dataset,test_dataset,labels,test_labels = d.getData()
@@ -178,12 +195,13 @@ loss_func = Fidelity_loss
 test_loss = nn.MSELoss()
 
 # %%  The Training part
-
+opt.zero_grad()
 for epoch in range(epochs):
+    opt.zero_grad()
     total_loss = []
     start_time = timeit.time.time()
     for i in range(len(labels)):
-        opt.zero_grad()
+        
         # for iris dataseti
         # data = datas['data']
         
@@ -203,7 +221,8 @@ for epoch in range(epochs):
         
         if(i%10 == 0):
             print(loss)
-        opt.step()
+            opt.step()
+            opt.zero_grad()
         
     
         total_loss.append(loss.item())
